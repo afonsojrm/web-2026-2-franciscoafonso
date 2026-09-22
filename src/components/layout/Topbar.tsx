@@ -1,8 +1,13 @@
 import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
-import { PawPrint, ChevronDown, LogOut, Building2, RotateCcw } from 'lucide-react';
+import { PawPrint, ChevronDown, LogOut, Building2, RotateCcw, Menu } from 'lucide-react';
 
-export const Topbar = () => {
+interface TopbarProps {
+  isMobile: boolean;
+  onToggleMobileMenu: () => void;
+}
+
+export const Topbar = ({ isMobile, onToggleMobileMenu }: TopbarProps) => {
   const { currentUser, users, switchUser, logout } = useAuth();
   const { resetDemoData } = useData();
 
@@ -10,22 +15,36 @@ export const Topbar = () => {
 
   return (
     <header className="sticky top-0 z-40 bg-white border-b border-slate-200 shadow-xs">
-      <div className="px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
+      <div className="px-3 sm:px-6 h-16 flex items-center justify-between gap-2 sm:gap-4">
         {/* Logo and Brand */}
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-sky-600 to-sky-500 text-white flex items-center justify-center shadow-md shadow-sky-600/20">
-            <PawPrint className="w-5 h-5" />
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+          {/* Mobile Menu Hamburger Button */}
+          {isMobile && (
+            <button
+              type="button"
+              onClick={onToggleMobileMenu}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors cursor-pointer shrink-0 border border-slate-200"
+              aria-label="Abrir menu de navegação"
+              title="Abrir Menu de Navegação"
+            >
+              <Menu className="w-4 h-4 text-slate-700" />
+              <span className="text-xs font-bold text-slate-700">Menu</span>
+            </button>
+          )}
+
+          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-tr from-sky-600 to-sky-500 text-white flex items-center justify-center shadow-md shadow-sky-600/20 shrink-0">
+            <PawPrint className="w-4 h-4 sm:w-5 sm:h-5" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <span className="text-xl font-bold text-slate-900 tracking-tight">
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <span className="text-lg sm:text-xl font-bold text-slate-900 tracking-tight">
                 Pet<span className="text-sky-600">Hub</span>
               </span>
-              <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold bg-sky-50 text-sky-700 border border-sky-200">
+              <span className="inline-flex items-center px-1.5 sm:px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] font-semibold bg-sky-50 text-sky-700 border border-sky-200">
                 Enterprise
               </span>
             </div>
-            <p className="text-xs text-slate-500 hidden md:block">
+            <p className="text-[11px] sm:text-xs text-slate-500 hidden md:block">
               Gestão Integrada para Complexos Pet
             </p>
           </div>

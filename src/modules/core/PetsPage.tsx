@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
 import type { PetEspecie, PetPorte, PetSexo } from '../../types';
+import { FormField } from '../../components/common/FormField';
+import { validateDate, validatePositiveNumber } from '../../utils/validators';
 import { Dog, Plus, Search, Heart, User, X, Phone } from 'lucide-react';
 
 export const PetsPage = () => {
@@ -23,6 +25,9 @@ export const PetsPage = () => {
   const [observacoesClinicas, setObservacoesClinicas] = useState('');
   const [fotoUrl, setFotoUrl] = useState('https://images.unsplash.com/photo-1543466835-00a7907e9de1?w=300&h=300&fit=crop');
 
+  // Form Validation State
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
   if (!currentUser) return null;
 
   const userTutor =
@@ -41,27 +46,66 @@ export const PetsPage = () => {
       p.especie.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const handleOpenModal = () => {
+    setErrors({});
+    if (!tutorId && tutors.length > 0) {
+      setTutorId(tutors[0].id);
+    }
+    setIsModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setErrors({});
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!nome || !tutorId) return;
+    const newErrors: Record<string, string> = {};
+
+    if (!tutorId) {
+      newErrors.tutorId = 'Selecione o tutor responsável.';
+    }
+
+    if (!nome.trim() || nome.trim().length < 2) {
+      newErrors.nome = 'Informe o nome do pet (pelo menos 2 caracteres).';
+    }
+
+    if (!raca.trim()) {
+      newErrors.raca = 'Informe a raça do animal (ou SRD/Mestiço).';
+    }
+
+    if (dataNascimento && !validateDate(dataNascimento, true)) {
+      newErrors.dataNascimento = 'A data de nascimento não pode ser futura.';
+    }
+
+    if (!validatePositiveNumber(pesoKg)) {
+      newErrors.pesoKg = 'Informe um peso válido maior que zero (ex: 8.5).';
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      return;
+    }
 
     addPet({
       tutorId,
-      nome,
+      nome: nome.trim(),
       especie,
-      raca,
+      raca: raca.trim(),
       dataNascimento,
       pesoKg: parseFloat(pesoKg) || 0,
       porte,
       sexo,
       castrado,
-      observacoesClinicas,
+      observacoesClinicas: observacoesClinicas.trim(),
       fotoUrl,
     });
 
     setNome('');
     setRaca('');
     setObservacoesClinicas('');
+    setErrors({});
     setIsModalOpen(false);
   };
 
@@ -82,7 +126,7 @@ export const PetsPage = () => {
 
         {currentUser.perfil !== 'TUTOR' && (
           <button
-            onClick={() => setIsModalOpen(true)}
+            onClick={handleOpenModal}
             className="inline-flex items-center gap-2 px-4 py-2.5 bg-sky-600 hover:bg-sky-700 text-white text-xs font-semibold rounded-xl shadow-sm shadow-sky-600/25 transition-all"
           >
             <Plus className="w-4 h-4" />
@@ -231,21 +275,26 @@ export const PetsPage = () => {
                 <h2 className="text-lg font-bold text-slate-900">Novo Animal (Pet)</h2>
               </div>
               <button
-                onClick={() => setIsModalOpen(false)}
+                onClick={handleCloseModal}
                 className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-3.5 mt-4 text-xs">
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Tutor Responsável (Cliente) *</label>
+            <form onSubmit={handleSubmit} noValidate className="space-y-3.5 mt-4 text-xs">
+              <FormField label="Tutor Responsável (Cliente)" required error={errors.tutorId}>
                 <select
                   value={tutorId}
-                  onChange={(e) => setTutorId(e.target.value)}
-                  required
-                  className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-sky-500 focus:outline-none"
+                  onChange={(e) => {
+                    setTutorId(e.target.value);
+                    if (errors.tutorId) setErrors((prev) => ({ ...prev, tutorId: '' }));
+                  }}
+                  className={`w-full border rounded-xl px-3 py-2 text-xs transition-colors focus:outline-none ${
+                    errors.tutorId
+                      ? 'border-rose-400 bg-rose-50/20 focus:ring-2 focus:ring-rose-400'
+                      : 'border-slate-200 focus:ring-2 focus:ring-sky-500'
+                  }`}
                 >
                   {tutors.map((t) => (
                     <option key={t.id} value={t.id}>
@@ -269,22 +318,27 @@ export const PetsPage = () => {
                     </div>
                   ) : null;
                 })()}
-              </div>
+              </FormField>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Nome do Pet *</label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <FormField label="Nome do Pet" required error={errors.nome}>
                   <input
                     type="text"
-                    required
                     value={nome}
-                    onChange={(e) => setNome(e.target.value)}
+                    onChange={(e) => {
+                      setNome(e.target.value);
+                      if (errors.nome) setErrors((prev) => ({ ...prev, nome: '' }));
+                    }}
                     placeholder="Ex: Rex"
-                    className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-sky-500 focus:outline-none"
+                    className={`w-full border rounded-xl px-3 py-2 text-xs transition-colors focus:outline-none ${
+                      errors.nome
+                        ? 'border-rose-400 bg-rose-50/20 focus:ring-2 focus:ring-rose-400'
+                        : 'border-slate-200 focus:ring-2 focus:ring-sky-500'
+                    }`}
                   />
-                </div>
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Espécie *</label>
+                </FormField>
+
+                <FormField label="Espécie" required>
                   <select
                     value={especie}
                     onChange={(e) => setEspecie(e.target.value as PetEspecie)}
@@ -295,45 +349,63 @@ export const PetsPage = () => {
                     <option value="Ave">Ave</option>
                     <option value="Outro">Outro</option>
                   </select>
-                </div>
+                </FormField>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Raça *</label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <FormField label="Raça" required error={errors.raca}>
                   <input
                     type="text"
-                    required
                     value={raca}
-                    onChange={(e) => setRaca(e.target.value)}
+                    onChange={(e) => {
+                      setRaca(e.target.value);
+                      if (errors.raca) setErrors((prev) => ({ ...prev, raca: '' }));
+                    }}
                     placeholder="Ex: Golden Retriever"
-                    className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-sky-500 focus:outline-none"
+                    className={`w-full border rounded-xl px-3 py-2 text-xs transition-colors focus:outline-none ${
+                      errors.raca
+                        ? 'border-rose-400 bg-rose-50/20 focus:ring-2 focus:ring-rose-400'
+                        : 'border-slate-200 focus:ring-2 focus:ring-sky-500'
+                    }`}
                   />
-                </div>
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Data de Nascimento</label>
+                </FormField>
+
+                <FormField label="Data de Nascimento" error={errors.dataNascimento}>
                   <input
                     type="date"
                     value={dataNascimento}
-                    onChange={(e) => setDataNascimento(e.target.value)}
-                    className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-sky-500 focus:outline-none"
+                    onChange={(e) => {
+                      setDataNascimento(e.target.value);
+                      if (errors.dataNascimento) setErrors((prev) => ({ ...prev, dataNascimento: '' }));
+                    }}
+                    className={`w-full border rounded-xl px-3 py-2 text-xs transition-colors focus:outline-none ${
+                      errors.dataNascimento
+                        ? 'border-rose-400 bg-rose-50/20 focus:ring-2 focus:ring-rose-400'
+                        : 'border-slate-200 focus:ring-2 focus:ring-sky-500'
+                    }`}
                   />
-                </div>
+                </FormField>
               </div>
 
               <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Peso (kg)</label>
+                <FormField label="Peso (kg)" error={errors.pesoKg}>
                   <input
                     type="number"
                     step="0.1"
                     value={pesoKg}
-                    onChange={(e) => setPesoKg(e.target.value)}
-                    className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-sky-500 focus:outline-none"
+                    onChange={(e) => {
+                      setPesoKg(e.target.value);
+                      if (errors.pesoKg) setErrors((prev) => ({ ...prev, pesoKg: '' }));
+                    }}
+                    className={`w-full border rounded-xl px-3 py-2 text-xs transition-colors focus:outline-none ${
+                      errors.pesoKg
+                        ? 'border-rose-400 bg-rose-50/20 focus:ring-2 focus:ring-rose-400'
+                        : 'border-slate-200 focus:ring-2 focus:ring-sky-500'
+                    }`}
                   />
-                </div>
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Porte *</label>
+                </FormField>
+
+                <FormField label="Porte" required>
                   <select
                     value={porte}
                     onChange={(e) => setPorte(e.target.value as PetPorte)}
@@ -345,9 +417,9 @@ export const PetsPage = () => {
                     <option value="Grande">Grande</option>
                     <option value="Gigante">Gigante</option>
                   </select>
-                </div>
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Sexo *</label>
+                </FormField>
+
+                <FormField label="Sexo" required>
                   <select
                     value={sexo}
                     onChange={(e) => setSexo(e.target.value as PetSexo)}
@@ -356,7 +428,7 @@ export const PetsPage = () => {
                     <option value="M">Macho</option>
                     <option value="F">Fêmea</option>
                   </select>
-                </div>
+                </FormField>
               </div>
 
               <div className="flex items-center gap-2 pt-1">
@@ -372,8 +444,7 @@ export const PetsPage = () => {
                 </label>
               </div>
 
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Observações Clínicas / Histórico</label>
+              <FormField label="Observações Clínicas / Histórico">
                 <textarea
                   rows={2}
                   value={observacoesClinicas}
@@ -381,10 +452,9 @@ export const PetsPage = () => {
                   placeholder="Alergias, medicações de uso contínuo, etc."
                   className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-sky-500 focus:outline-none"
                 ></textarea>
-              </div>
+              </FormField>
 
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Foto (URL / S3)</label>
+              <FormField label="Foto (URL)">
                 <input
                   type="url"
                   value={fotoUrl}
@@ -392,19 +462,19 @@ export const PetsPage = () => {
                   placeholder="https://..."
                   className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-sky-500 focus:outline-none"
                 />
-              </div>
+              </FormField>
 
               <div className="pt-4 flex items-center justify-end gap-2 border-t border-slate-100">
                 <button
                   type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 text-xs font-semibold"
+                  onClick={handleCloseModal}
+                  className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 text-xs font-semibold transition-colors"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-semibold shadow-xs"
+                  className="px-5 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-semibold shadow-xs transition-colors"
                 >
                   Salvar Animal
                 </button>

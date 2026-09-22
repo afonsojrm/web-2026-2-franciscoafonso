@@ -53,9 +53,7 @@ export const ClientBookingsPage = () => {
     recusarAgendamentoCliente,
   } = useData();
 
-  if (!currentUser) return null;
-
-  const isStaff = currentUser.perfil !== 'TUTOR';
+  const isStaff = currentUser?.perfil !== 'TUTOR';
 
   // State for filters
   const [activeTab, setActiveTab] = useState<FilterTab>('TODOS');
@@ -96,6 +94,8 @@ export const ClientBookingsPage = () => {
 
   // Form error
   const [formError, setFormError] = useState<string | null>(null);
+
+  if (!currentUser) return null;
 
   // Resolve logged tutor (if tutor portal)
   const loggedTutor = !isStaff

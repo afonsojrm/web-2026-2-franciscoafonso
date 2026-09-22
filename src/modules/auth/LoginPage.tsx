@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { validateEmail } from '../../utils/validators';
 import {
   PawPrint,
   Lock,
@@ -30,6 +31,16 @@ export const LoginPage = () => {
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
+
+    if (!email.trim() || !validateEmail(email)) {
+      setErrorMsg('Por favor, informe um endereço de e-mail válido.');
+      return;
+    }
+
+    if (!password) {
+      setErrorMsg('Por favor, informe a senha de acesso.');
+      return;
+    }
 
     const success = login(email, password);
     if (success) {

@@ -67,28 +67,45 @@ export const ChatBotWidget = () => {
 
         socket.onmessage = (event) => {
           if (!isSubscribed) return;
+          if (!event.data) return;
           try {
             const data = JSON.parse(event.data);
             const botReply = data.message || data.text || data.data || JSON.stringify(data);
-            setMessages((prev) => [
-              ...prev,
-              {
-                id: Math.random().toString(36).substring(2, 9),
-                sender: 'bot',
-                text: botReply,
-                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-              },
-            ]);
+            if (!botReply || !String(botReply).trim()) return;
+
+            setMessages((prev) => {
+              const last = prev[prev.length - 1];
+              if (last && last.sender === 'bot' && last.text === botReply) {
+                return prev; // Deduplica automaticamente respostas repetidas
+              }
+              return [
+                ...prev,
+                {
+                  id: Math.random().toString(36).substring(2, 9),
+                  sender: 'bot',
+                  text: botReply,
+                  time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                },
+              ];
+            });
           } catch {
-            setMessages((prev) => [
-              ...prev,
-              {
-                id: Math.random().toString(36).substring(2, 9),
-                sender: 'bot',
-                text: String(event.data),
-                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-              },
-            ]);
+            const rawText = String(event.data);
+            if (!rawText.trim()) return;
+            setMessages((prev) => {
+              const last = prev[prev.length - 1];
+              if (last && last.sender === 'bot' && last.text === rawText) {
+                return prev;
+              }
+              return [
+                ...prev,
+                {
+                  id: Math.random().toString(36).substring(2, 9),
+                  sender: 'bot',
+                  text: rawText,
+                  time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                },
+              ];
+            });
           }
         };
 

@@ -26,6 +26,8 @@ export const ChatBotWidget = () => {
 
   const primaryWsUrl =
     import.meta.env.VITE_CHATBOT_WS_URL ||
+    'wss://api.franciscoafonso.zangado.web.ufersa.dev.br';
+  const stageWsUrl =
     'wss://api.franciscoafonso.zangado.web.ufersa.dev.br/production';
   const directWsUrl =
     'wss://bfi1jnvepa.execute-api.us-east-1.amazonaws.com/production';
@@ -92,8 +94,9 @@ export const ChatBotWidget = () => {
 
         socket.onerror = () => {
           if (!isSubscribed) return;
-          if (!isFallback && targetUrl !== directWsUrl) {
-            // Tenta fallback direto se a rota customizada ainda estiver propagando DNS
+          if (targetUrl === primaryWsUrl) {
+            tryConnect(stageWsUrl, false);
+          } else if (targetUrl === stageWsUrl) {
             tryConnect(directWsUrl, true);
           } else {
             setIsConnected(false);
@@ -103,8 +106,15 @@ export const ChatBotWidget = () => {
 
         socket.onclose = () => {
           if (!isSubscribed) return;
-          if (!isFallback && !isConnected && targetUrl !== directWsUrl) {
-            tryConnect(directWsUrl, true);
+          if (!isConnected) {
+            if (targetUrl === primaryWsUrl) {
+              tryConnect(stageWsUrl, false);
+            } else if (targetUrl === stageWsUrl) {
+              tryConnect(directWsUrl, true);
+            } else {
+              setIsConnected(false);
+              setIsConnecting(false);
+            }
           } else {
             setIsConnected(false);
             setIsConnecting(false);

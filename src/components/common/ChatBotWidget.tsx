@@ -24,9 +24,11 @@ export const ChatBotWidget = () => {
   const socketRef = useRef<WebSocket | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const wsUrl =
+  const primaryWsUrl =
     import.meta.env.VITE_CHATBOT_WS_URL ||
-    'wss://api.franciscoafonso.zangado.web.ufersa.dev.br';
+    'wss://api.franciscoafonso.zangado.web.ufersa.dev.br/production';
+  const directWsUrl =
+    'wss://bfi1jnvepa.execute-api.us-east-1.amazonaws.com/production';
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -36,63 +38,80 @@ export const ChatBotWidget = () => {
     scrollToBottom();
   }, [messages]);
 
-  // Gerenciamento da conexão WebSocket com o API Gateway
+  // Gerenciamento da conexão WebSocket com o API Gateway (com fallback automático resiliente)
   useEffect(() => {
     let isSubscribed = true;
     setIsConnecting(true);
 
-    try {
-      const socket = new WebSocket(wsUrl);
-      socketRef.current = socket;
+    const tryConnect = (targetUrl: string, isFallback = false) => {
+      try {
+        const socket = new WebSocket(targetUrl);
+        socketRef.current = socket;
 
-      socket.onopen = () => {
-        if (!isSubscribed) return;
-        setIsConnected(true);
-        setIsConnecting(false);
-      };
+        socket.onopen = () => {
+          if (!isSubscribed) return;
+          setIsConnected(true);
+          setIsConnecting(false);
+        };
 
-      socket.onmessage = (event) => {
-        if (!isSubscribed) return;
-        try {
-          const data = JSON.parse(event.data);
-          const botReply = data.message || data.text || data.data || JSON.stringify(data);
-          setMessages((prev) => [
-            ...prev,
-            {
-              id: Math.random().toString(36).substring(2, 9),
-              sender: 'bot',
-              text: botReply,
-              time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            },
-          ]);
-        } catch {
-          setMessages((prev) => [
-            ...prev,
-            {
-              id: Math.random().toString(36).substring(2, 9),
-              sender: 'bot',
-              text: String(event.data),
-              time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            },
-          ]);
+        socket.onmessage = (event) => {
+          if (!isSubscribed) return;
+          try {
+            const data = JSON.parse(event.data);
+            const botReply = data.message || data.text || data.data || JSON.stringify(data);
+            setMessages((prev) => [
+              ...prev,
+              {
+                id: Math.random().toString(36).substring(2, 9),
+                sender: 'bot',
+                text: botReply,
+                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              },
+            ]);
+          } catch {
+            setMessages((prev) => [
+              ...prev,
+              {
+                id: Math.random().toString(36).substring(2, 9),
+                sender: 'bot',
+                text: String(event.data),
+                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              },
+            ]);
+          }
+        };
+
+        socket.onerror = () => {
+          if (!isSubscribed) return;
+          if (!isFallback && targetUrl !== directWsUrl) {
+            // Tenta fallback direto se a rota customizada ainda estiver propagando DNS
+            tryConnect(directWsUrl, true);
+          } else {
+            setIsConnected(false);
+            setIsConnecting(false);
+          }
+        };
+
+        socket.onclose = () => {
+          if (!isSubscribed) return;
+          if (!isFallback && !isConnected && targetUrl !== directWsUrl) {
+            tryConnect(directWsUrl, true);
+          } else {
+            setIsConnected(false);
+            setIsConnecting(false);
+          }
+        };
+      } catch {
+        if (!isFallback && targetUrl !== directWsUrl) {
+          tryConnect(directWsUrl, true);
+        } else {
+          setIsConnected(false);
+          setIsConnecting(false);
         }
-      };
+      }
+    };
 
-      socket.onerror = () => {
-        if (!isSubscribed) return;
-        setIsConnected(false);
-        setIsConnecting(false);
-      };
-
-      socket.onclose = () => {
-        if (!isSubscribed) return;
-        setIsConnected(false);
-        setIsConnecting(false);
-      };
-    } catch {
-      setIsConnected(false);
-      setIsConnecting(false);
-    }
+    tryConnect(primaryWsUrl);
 
     return () => {
       isSubscribed = false;
@@ -101,7 +120,7 @@ export const ChatBotWidget = () => {
         socketRef.current = null;
       }
     };
-  }, [wsUrl]);
+  }, [primaryWsUrl, directWsUrl]);
 
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();

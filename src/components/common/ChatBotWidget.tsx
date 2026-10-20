@@ -45,7 +45,16 @@ export const ChatBotWidget = () => {
 
     const tryConnect = (targetUrl: string, isFallback = false) => {
       try {
-        const socket = new WebSocket(targetUrl);
+        const token =
+          localStorage.getItem('pethub_jwt_token') ||
+          localStorage.getItem('id_token') ||
+          localStorage.getItem('access_token') ||
+          'authenticated-cognito-session';
+        const urlWithAuth = targetUrl.includes('?')
+          ? `${targetUrl}&token=${encodeURIComponent(token)}`
+          : `${targetUrl}?token=${encodeURIComponent(token)}`;
+
+        const socket = new WebSocket(urlWithAuth);
         socketRef.current = socket;
 
         socket.onopen = () => {

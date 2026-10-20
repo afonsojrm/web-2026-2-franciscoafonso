@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom';
 import { Topbar } from './Topbar';
 import { Sidebar } from './Sidebar';
 import { Breadcrumbs } from './Breadcrumbs';
+import { ChatBotWidget } from '../common/ChatBotWidget';
 import { useIsMobile } from '../../hooks/useIsMobile';
 
 export const Layout = ({ children }: { children: ReactNode }) => {
@@ -35,6 +36,7 @@ export const Layout = ({ children }: { children: ReactNode }) => {
           {children}
         </main>
       </div>
+      <ChatBotWidget />
     </div>
   );
 };

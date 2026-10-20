@@ -18,9 +18,14 @@ O **PetHub** é uma aplicação web completa e modular para complexos e estabele
   - **Sócio A:** Gestão operacional e financeira restrita à Clínica Veterinária e ao Pet Shop / PDV.
   - **Sócio B:** Gestão operacional e financeira restrita ao Hotel Pet e Creche Pet (Daycare).
   - Isolamento estrito de faturamento, custos e balancetes contábeis entre os sócios.
-- **Controle de Acesso Baseado em Perfis (RBAC - RF01):**
+- **Controle de Acesso Baseado em Perfis e Autenticação (RBAC - RF01):**
+  - Autenticação federada com **Google Cloud OAuth 2.0** (`@react-oauth/google`) e **AWS Cognito User Pools**.
   - Simulador de perfil interativo na Topbar (`Sócio A`, `Sócio B`, `Admin Geral`, `Médico Veterinário`, `Funcionário`, `Tutor`).
   - Trava automática e avisos de segregação nas rotas e seções não autorizadas.
+- **Qualidade de Dados, Validações e Integrações (RF02):**
+  - Consulta automática de endereço em tempo real via **API ViaCEP**.
+  - Validação algorítmica estrita do dígito verificador de CPF e formatos telefônicos.
+  - Máscaras dinâmicas de digitação (CPF, telefone, CEP, moeda) e formulários acessíveis via `FormField`.
 - **Regras de Negócio e Integridade Transacional (ACID):**
   - **RN01:** Unicidade cadastral de tutores e pets.
   - **RN02:** Segregação financeira absoluta entre as frentes societárias.
@@ -28,6 +33,8 @@ O **PetHub** é uma aplicação web completa e modular para complexos e estabele
   - **RN04:** Garantia de capacidade do hotel e prevenção ativa de overbooking.
   - **RN05:** Controle de lotação na creche com bloqueio automático após esgotamento de vagas no turno.
   - **RN06:** Bloqueio imediato de vendas no PDV sem estoque disponível.
+  - **RNF01:** Responsividade plena (Mobile Drawer com `useIsMobile`, Topbar adaptativa e `Breadcrumbs`).
+  - **RNF03:** Proteção estrita de credenciais em `.env` e chaves locais fora do versionamento (`ChaveGoogleAuth/`).
   - **RNF06:** Trilha de auditoria imutável registrando ações (`INSERT`, `UPDATE`, `DELETE`).
 
 ---
@@ -39,6 +46,9 @@ O **PetHub** é uma aplicação web completa e modular para complexos e estabele
 - **Vite 8** (Ferramenta de build de última geração com HMR instantâneo)
 - **TypeScript 5** (Tipagem estática estrita com `verbatimModuleSyntax`)
 - **Tailwind CSS v4** (Nova engine CSS de alta performance via `@tailwindcss/vite`)
+- **Google Cloud OAuth 2.0** (`@react-oauth/google` para autenticação federada)
+- **AWS Cognito User Pools** (Integração de identidade em nuvem)
+- **API ViaCEP** (Consulta assíncrona de CEP e autopreenchimento de formulários)
 - **Lucide React** (Ícones semânticos para o design system)
 
 ---

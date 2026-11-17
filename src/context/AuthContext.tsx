@@ -10,6 +10,7 @@ interface AuthContextType {
   cognitoToken: string | null;
   getValidCognitoToken: () => string | null;
   invalidateCognitoToken: () => void;
+  updateCurrentUserProfile: (fields: { nome?: string; email?: string }) => void;
   login: (email: string, password?: string) => boolean;
   loginWithGoogle: (credential: string) => { success: boolean; message?: string };
   loginWithCognito: (provider?: 'Google', redirectAfter?: string) => void;
@@ -68,15 +69,40 @@ const readHashIdToken = (): string | null => {
   return new URLSearchParams(hash).get('id_token');
 };
 
+const isSyntheticProviderUsername = (val?: string): boolean =>
+  Boolean(val && /^(google|facebook|amazon|apple|saml|oidc)_[\w.-]+$/i.test(val.trim()));
+
+const buildDisplayNameFromPayload = (payload: DecodedJwtPayload): string => {
+  const rawName = (payload.name || '').trim();
+  if (rawName && !isSyntheticProviderUsername(rawName)) {
+    return rawName;
+  }
+  const username = (payload['cognito:username'] || '').trim();
+  if (username && !isSyntheticProviderUsername(username)) {
+    return username;
+  }
+  if (payload.email) {
+    return payload.email
+      .split('@')[0]
+      .split(/[._-]+/)
+      .filter(Boolean)
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(' ');
+  }
+  return 'Usuário Cognito';
+};
+
 const buildUserFromPayload = (payload: DecodedJwtPayload, existingUsers: User[]): User | null => {
-  if (!payload.email) return null;
-  const matched = existingUsers.find((u) => u.email.toLowerCase() === payload.email!.toLowerCase());
+  if (!payload.email && !payload.sub) return null;
+  const matched = payload.email
+    ? existingUsers.find((u) => u.email.toLowerCase() === payload.email!.toLowerCase())
+    : undefined;
   if (matched) return matched;
   const isRealCognito = Boolean(payload.iss && payload.iss.includes('cognito-idp.'));
   return {
     id: `${isRealCognito ? 'cognito' : 'google'}-${payload.sub || Math.random().toString(36).substring(2, 9)}`,
-    nome: payload.name || payload['cognito:username'] || payload.email.split('@')[0],
-    email: payload.email,
+    nome: buildDisplayNameFromPayload(payload),
+    email: payload.email || '',
     perfil: 'ADMIN',
     unidadesAutorizadas: ['CLINICA', 'PETSHOP', 'HOTEL', 'CRECHE'],
     ativo: true,
@@ -213,19 +239,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       console.log(credential);
     }
 
-    if (!payload || !payload.email) {
+    if (!payload || (!payload.email && !payload.sub)) {
       return { success: false, message: 'Não foi possível validar o token de autenticação.' };
     }
 
-    let user = users.find((u) => u.email.toLowerCase() === payload.email!.toLowerCase());
+    let user = payload.email
+      ? users.find((u) => u.email.toLowerCase() === payload.email!.toLowerCase())
+      : undefined;
 
     if (!user) {
       // Usuário autenticado externamente não estava no mock pré-definido:
       // cria perfil ativo no sistema com permissões de visualização/administração
       user = {
         id: `${isRealCognito ? 'cognito' : 'google'}-${payload.sub || Math.random().toString(36).substring(2, 9)}`,
-        nome: payload.name || payload['cognito:username'] || payload.email.split('@')[0],
-        email: payload.email,
+        nome: buildDisplayNameFromPayload(payload),
+        email: payload.email || '',
         perfil: 'ADMIN',
         unidadesAutorizadas: ['CLINICA', 'PETSHOP', 'HOTEL', 'CRECHE'],
         ativo: true,
@@ -383,6 +411,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     );
   };
 
+  const updateCurrentUserProfile = ({ nome, email }: { nome?: string; email?: string }) => {
+    setCurrentUser((prev) => {
+      if (!prev) return prev;
+      const nextNome = nome?.trim() || prev.nome;
+      const nextEmail = email?.trim() || prev.email;
+      if (nextNome === prev.nome && nextEmail === prev.email) return prev;
+      return {
+        ...prev,
+        nome: nextNome,
+        email: nextEmail,
+      };
+    });
+  };
+
   const canAccessAudit = (): boolean => {
     if (!currentUser) return false;
     return currentUser.perfil === 'ADMIN';
@@ -398,6 +440,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         cognitoToken,
         getValidCognitoToken,
         invalidateCognitoToken,
+        updateCurrentUserProfile,
         login,
         loginWithGoogle,
         loginWithCognito,

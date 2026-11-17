@@ -69,18 +69,39 @@ interface RequestLog {
   payload: string;
 }
 
+const isSyntheticUserString = (val?: string | null): boolean =>
+  Boolean(
+    !val ||
+      /^(google|facebook|amazon|apple|saml|oidc)_[\w.-]+$/i.test(val.trim()) ||
+      val.trim() === 'Usuário Cognito'
+  );
+
 export const ProfilePage = () => {
-  const { currentUser, cognitoToken, getValidCognitoToken, invalidateCognitoToken, loginWithCognito } = useAuth();
+  const {
+    currentUser,
+    cognitoToken,
+    getValidCognitoToken,
+    invalidateCognitoToken,
+    updateCurrentUserProfile,
+    loginWithCognito,
+  } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const isRealFederatedUser = Boolean(
+    currentUser?.id.startsWith('cognito-') || currentUser?.id.startsWith('google-')
+  );
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [localPreviewUrl, setLocalPreviewUrl] = useState<string | null>(null);
   const [s3Profile, setS3Profile] = useState<S3ProfileResponse | null>(null);
   const [profileForm, setProfileForm] = useState<UserProfileFields>({
-    nome: currentUser?.nome || '',
-    email: currentUser?.email || '',
+    nome:
+      isRealFederatedUser && !isSyntheticUserString(currentUser?.nome)
+        ? currentUser?.nome || ''
+        : '',
+    email: isRealFederatedUser ? currentUser?.email || '' : '',
     telefone: '',
-    cargo: currentUser?.perfil || '',
+    cargo: 'Administrador',
     unidade: 'UFERSA PetHub',
     bio: '',
   });
@@ -97,18 +118,36 @@ export const ProfilePage = () => {
   const hydrateFormFromResponse = useCallback(
     (data: S3ProfileResponse) => {
       if (!data.profile) return;
+      const savedNome = !isSyntheticUserString(data.profile.nome) ? data.profile.nome : '';
+      const fallbackNome =
+        isRealFederatedUser && !isSyntheticUserString(currentUser?.nome)
+          ? currentUser?.nome || ''
+          : '';
+      const savedEmail = data.profile.email || data.userEmail || '';
+      const fallbackEmail = isRealFederatedUser ? currentUser?.email || '' : '';
+
+      const nextNome = savedNome || fallbackNome;
+      const nextEmail = savedEmail || fallbackEmail;
+
       setProfileForm({
         usuarioPetHub: data.profile.usuarioPetHub || data.userId || '',
-        nome: data.profile.nome || currentUser?.nome || '',
-        email: data.profile.email || data.userEmail || currentUser?.email || '',
+        nome: nextNome,
+        email: nextEmail,
         telefone: data.profile.telefone || '',
-        cargo: data.profile.cargo || currentUser?.perfil || '',
+        cargo: data.profile.cargo || 'Administrador',
         unidade: data.profile.unidade || 'UFERSA PetHub',
         bio: data.profile.bio || '',
         profileUpdatedAt: data.profile.profileUpdatedAt || null,
       });
+
+      if (data.profile.profileUpdatedAt && (nextNome || nextEmail)) {
+        updateCurrentUserProfile({
+          nome: nextNome || undefined,
+          email: nextEmail || undefined,
+        });
+      }
     },
-    [currentUser?.email, currentUser?.nome, currentUser?.perfil]
+    [currentUser?.email, currentUser?.nome, isRealFederatedUser, updateCurrentUserProfile]
   );
 
   const fetchProfileFromS3 = useCallback(async () => {
@@ -497,10 +536,12 @@ export const ProfilePage = () => {
 
               <div className="mt-4 text-center space-y-1">
                 <p className="text-base font-bold text-slate-900">
-                  {s3Profile?.profile?.nome || profileForm.nome || currentUser?.nome || 'Usuário'}
+                  {(!isSyntheticUserString(s3Profile?.profile?.nome) && s3Profile?.profile?.nome) ||
+                    profileForm.nome ||
+                    'Complete seu cadastro ao lado'}
                 </p>
                 <p className="text-xs text-slate-500">
-                  {s3Profile?.profile?.email || profileForm.email || currentUser?.email}
+                  {s3Profile?.profile?.email || profileForm.email || 'E-mail ainda não cadastrado'}
                 </p>
                 {(s3Profile?.profile?.cargo || profileForm.cargo) && (
                   <span className="inline-block mt-1 px-2.5 py-0.5 rounded-full bg-sky-50 border border-sky-200 text-sky-700 text-[11px] font-semibold">

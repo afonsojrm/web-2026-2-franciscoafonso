@@ -80,6 +80,7 @@ export const ProfilePage = () => {
   const {
     currentUser,
     cognitoToken,
+    cognitoProfileClaims,
     getValidCognitoToken,
     invalidateCognitoToken,
     updateCurrentUserProfile,
@@ -96,10 +97,11 @@ export const ProfilePage = () => {
   const [s3Profile, setS3Profile] = useState<S3ProfileResponse | null>(null);
   const [profileForm, setProfileForm] = useState<UserProfileFields>({
     nome:
-      isRealFederatedUser && !isSyntheticUserString(currentUser?.nome)
+      cognitoProfileClaims?.name ||
+      (isRealFederatedUser && !isSyntheticUserString(currentUser?.nome)
         ? currentUser?.nome || ''
-        : '',
-    email: isRealFederatedUser ? currentUser?.email || '' : '',
+        : ''),
+    email: cognitoProfileClaims?.email || (isRealFederatedUser ? currentUser?.email || '' : ''),
     telefone: '',
     cargo: 'Administrador',
     unidade: 'UFERSA PetHub',
@@ -120,11 +122,13 @@ export const ProfilePage = () => {
       if (!data.profile) return;
       const savedNome = !isSyntheticUserString(data.profile.nome) ? data.profile.nome : '';
       const fallbackNome =
-        isRealFederatedUser && !isSyntheticUserString(currentUser?.nome)
+        cognitoProfileClaims?.name ||
+        (isRealFederatedUser && !isSyntheticUserString(currentUser?.nome)
           ? currentUser?.nome || ''
-          : '';
+          : '');
       const savedEmail = data.profile.email || data.userEmail || '';
-      const fallbackEmail = isRealFederatedUser ? currentUser?.email || '' : '';
+      const fallbackEmail =
+        cognitoProfileClaims?.email || (isRealFederatedUser ? currentUser?.email || '' : '');
 
       const nextNome = savedNome || fallbackNome;
       const nextEmail = savedEmail || fallbackEmail;
@@ -147,7 +151,14 @@ export const ProfilePage = () => {
         });
       }
     },
-    [currentUser?.email, currentUser?.nome, isRealFederatedUser, updateCurrentUserProfile]
+    [
+      cognitoProfileClaims?.email,
+      cognitoProfileClaims?.name,
+      currentUser?.email,
+      currentUser?.nome,
+      isRealFederatedUser,
+      updateCurrentUserProfile,
+    ]
   );
 
   const fetchProfileFromS3 = useCallback(async () => {
@@ -391,7 +402,9 @@ export const ProfilePage = () => {
     setTimeout(() => setCopiedToken(false), 2000);
   };
 
-  const activeAvatarSrc = localPreviewUrl || s3Profile?.imageDataUrl || s3Profile?.imageUrl || null;
+  const s3OrLocalAvatar = localPreviewUrl || s3Profile?.imageDataUrl || s3Profile?.imageUrl || null;
+  const activeAvatarSrc = s3OrLocalAvatar || cognitoProfileClaims?.picture || null;
+  const isShowingGoogleFallback = Boolean(!s3OrLocalAvatar && cognitoProfileClaims?.picture);
 
   return (
     <div className="space-y-6">
@@ -520,6 +533,7 @@ export const ProfilePage = () => {
                   <img
                     src={activeAvatarSrc}
                     alt="Foto de perfil"
+                    referrerPolicy="no-referrer"
                     className="w-full h-full object-cover"
                   />
                 ) : (
@@ -533,6 +547,17 @@ export const ProfilePage = () => {
                   </div>
                 )}
               </div>
+
+              {isShowingGoogleFallback && (
+                <span className="mt-2.5 px-2.5 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-[10px] font-semibold text-center">
+                  Foto inicial do Google — envie outra ao lado para salvar no S3
+                </span>
+              )}
+              {!localPreviewUrl && s3Profile?.exists && (
+                <span className="mt-2.5 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-[10px] font-semibold text-center">
+                  Foto personalizada salva no S3
+                </span>
+              )}
 
               <div className="mt-4 text-center space-y-1">
                 <p className="text-base font-bold text-slate-900">

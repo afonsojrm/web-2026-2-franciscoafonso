@@ -2,12 +2,19 @@ import { createContext, useContext, useState, useEffect, type ReactNode } from '
 import type { User, OperatingUnit } from '../types';
 import { INITIAL_USERS } from '../data/mockData';
 
+interface CognitoProfileClaims {
+  name: string;
+  email: string;
+  picture: string;
+}
+
 interface AuthContextType {
   currentUser: User | null;
   users: User[];
   isAuthenticated: boolean;
   authToken: string | null;
   cognitoToken: string | null;
+  cognitoProfileClaims: CognitoProfileClaims | null;
   getValidCognitoToken: () => string | null;
   invalidateCognitoToken: () => void;
   updateCurrentUserProfile: (fields: { nome?: string; email?: string }) => void;
@@ -28,6 +35,7 @@ interface AuthContextType {
 interface DecodedJwtPayload {
   email?: string;
   name?: string;
+  picture?: string;
   sub?: string;
   iss?: string;
   exp?: number;
@@ -213,7 +221,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
 
     const providerParam = provider ? `identity_provider=${provider}&` : '';
-    const cognitoUrl = `${domain}/oauth2/authorize?${providerParam}client_id=${clientId}&response_type=${responseType}&scope=email+openid&redirect_uri=${encodeURIComponent(redirectUri)}`;
+    const cognitoUrl = `${domain}/oauth2/authorize?${providerParam}client_id=${clientId}&response_type=${responseType}&scope=email+openid+profile&redirect_uri=${encodeURIComponent(redirectUri)}`;
     window.location.href = cognitoUrl;
   };
 
@@ -430,6 +438,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return currentUser.perfil === 'ADMIN';
   };
 
+  const cognitoPayload = cognitoToken ? decodeGoogleCredential(cognitoToken) : null;
+  const cognitoDisplayName = cognitoPayload ? buildDisplayNameFromPayload(cognitoPayload) : '';
+  const cognitoProfileClaims: CognitoProfileClaims | null = cognitoPayload
+    ? {
+        name: cognitoDisplayName === 'Usuário Cognito' ? '' : cognitoDisplayName,
+        email: cognitoPayload.email || '',
+        picture: cognitoPayload.picture || '',
+      }
+    : null;
+
   return (
     <AuthContext.Provider
       value={{
@@ -438,6 +456,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         isAuthenticated: !!currentUser && !!authToken,
         authToken,
         cognitoToken,
+        cognitoProfileClaims,
         getValidCognitoToken,
         invalidateCognitoToken,
         updateCurrentUserProfile,

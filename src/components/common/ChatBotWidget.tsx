@@ -61,10 +61,57 @@ interface StoredChatbotFile {
   fileUrl: string;
 }
 
+const renderInlineFormatting = (line: string) => {
+  const segments = line.split(/(\*\*[^*]+\*\*|`[^`]+`)/g);
+  return segments.map((seg, idx) => {
+    if (seg.startsWith('**') && seg.endsWith('**') && seg.length > 4) {
+      return (
+        <strong key={idx} className="font-semibold">
+          {seg.slice(2, -2)}
+        </strong>
+      );
+    }
+    if (seg.startsWith('`') && seg.endsWith('`') && seg.length > 2) {
+      return (
+        <code key={idx} className="px-1 py-0.5 rounded bg-slate-100 text-slate-800 font-mono text-[11px]">
+          {seg.slice(1, -1)}
+        </code>
+      );
+    }
+    return seg;
+  });
+};
+
+const renderFormattedMessage = (text: string) => {
+  const lines = text.split('\n');
+  return (
+    <div className="space-y-1.5 leading-relaxed">
+      {lines.map((rawLine, idx) => {
+        const trimmed = rawLine.trim();
+        if (!trimmed) {
+          return <div key={idx} className="h-0.5" />;
+        }
+        const bulletMatch = trimmed.match(/^([*-]|\d+\.)\s+(.*)$/);
+        if (bulletMatch) {
+          return (
+            <div key={idx} className="flex items-start gap-1.5 pl-0.5">
+              <span className="font-bold text-sky-600 shrink-0">
+                {bulletMatch[1] === '*' || bulletMatch[1] === '-' ? '•' : bulletMatch[1]}
+              </span>
+              <span>{renderInlineFormatting(bulletMatch[2])}</span>
+            </div>
+          );
+        }
+        return <p key={idx}>{renderInlineFormatting(rawLine)}</p>;
+      })}
+    </div>
+  );
+};
+
 const WELCOME_MESSAGE: ChatMessage = {
   id: 'welcome',
   sender: 'bot',
-  text: 'Olá! Sou o assistente virtual do PetHub 🐾. Você pode tirar dúvidas ou enviar fotos e documentos (ex: cartão de vacina, receita ou foto do pet) usando o ícone de clipe!',
+  text: 'Assistente PetHub ativo. Envie sua dúvida sobre clínica, hotel ou creche, ou anexe uma foto/documento pelo ícone de clipe.',
   time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
 };
 
@@ -504,7 +551,11 @@ export const ChatBotWidget = () => {
                     </div>
                   )}
 
-                  <p className="leading-relaxed whitespace-pre-wrap">{msg.text}</p>
+                  {msg.sender === 'bot' ? (
+                    renderFormattedMessage(msg.text)
+                  ) : (
+                    <p className="leading-relaxed whitespace-pre-wrap">{msg.text}</p>
+                  )}
 
                   {/* Card de arquivo processado e salvo no S3 retornado pelo backend */}
                   {msg.sender === 'bot' && msg.attachment?.fileUrl && (
@@ -548,7 +599,9 @@ export const ChatBotWidget = () => {
               <div className="flex items-start">
                 <div className="bg-white border border-slate-200/80 rounded-2xl rounded-bl-none px-3.5 py-2.5 text-xs text-slate-500 flex items-center gap-2 shadow-xs">
                   <Loader2 className="w-3.5 h-3.5 animate-spin text-sky-600" />
-                  <span>Processando arquivo e salvando no DynamoDB...</span>
+                  <span>
+                    {selectedFile ? 'Analisando arquivo e salvando no S3...' : 'Digitando resposta...'}
+                  </span>
                 </div>
               </div>
             )}

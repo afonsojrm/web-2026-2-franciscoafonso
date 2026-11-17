@@ -1,7 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { useData } from '../../context/DataContext';
-import { PawPrint, ChevronDown, LogOut, Building2, RotateCcw, Menu } from 'lucide-react';
+import { PawPrint, LogOut, Menu } from 'lucide-react';
 
 interface TopbarProps {
   isMobile: boolean;
@@ -9,8 +8,7 @@ interface TopbarProps {
 }
 
 export const Topbar = ({ isMobile, onToggleMobileMenu }: TopbarProps) => {
-  const { currentUser, users, switchUser, logout } = useAuth();
-  const { resetDemoData } = useData();
+  const { currentUser, logout } = useAuth();
 
   if (!currentUser) return null;
 
@@ -51,58 +49,13 @@ export const Topbar = ({ isMobile, onToggleMobileMenu }: TopbarProps) => {
           </div>
         </div>
 
-        {/* Right Section: Workspace Context & User */}
+        {/* Right Section: Authenticated User & Logout */}
         <div className="flex items-center gap-3">
-          {/* Reset Demo Data Button */}
-          <button
-            onClick={() => {
-              if (window.confirm('Deseja recarregar a base com todos os novos fluxos de agendamento e confirmação do cliente?')) {
-                resetDemoData();
-                window.location.reload();
-              }
-            }}
-            title="Restaurar dados com novos agendamentos e canais"
-            className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 text-slate-500 hover:text-sky-700 hover:bg-sky-50 border border-slate-200 rounded-xl text-xs font-semibold transition-all"
-          >
-            <RotateCcw className="w-3.5 h-3.5 text-sky-600" />
-            <span>Sincronizar Dados Demo</span>
-          </button>
-
-          {/* Workspace Switcher */}
-          <div className="hidden sm:flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5">
-            <Building2 className="w-3.5 h-3.5 text-slate-500" />
-            <span className="text-xs text-slate-500 font-medium hidden md:inline">Visão:</span>
-            <div className="relative">
-              <select
-                value={currentUser.id}
-                onChange={(e) => switchUser(e.target.value)}
-                aria-label="Alternar contexto de acesso"
-                className="appearance-none bg-transparent text-slate-800 text-xs font-semibold pr-6 cursor-pointer focus:outline-none"
-              >
-                {users.map((u) => {
-                  let perfilLabel = 'Administrador';
-                  if (u.perfil === 'SOCIO_A') perfilLabel = 'Clínica & Pet Shop';
-                  if (u.perfil === 'SOCIO_B') perfilLabel = 'Hotel & Creche';
-                  if (u.perfil === 'VET') perfilLabel = 'Veterinário';
-                  if (u.perfil === 'FUNCIONARIO') perfilLabel = 'Atendimento';
-                  if (u.perfil === 'TUTOR') perfilLabel = 'Cliente';
-
-                  return (
-                    <option key={u.id} value={u.id}>
-                      {u.nome} — {perfilLabel}
-                    </option>
-                  );
-                })}
-              </select>
-              <ChevronDown className="w-3 h-3 text-slate-400 absolute right-0 top-1/2 -translate-y-1/2 pointer-events-none" />
-            </div>
-          </div>
-
           {/* Current User Badge (Link para /profile) */}
           <Link
             to="/profile"
             title="Abrir Meu Perfil e Foto no S3"
-            className="flex items-center gap-2.5 pl-2 sm:pl-3 sm:border-l sm:border-slate-200 hover:opacity-80 transition-opacity"
+            className="flex items-center gap-2.5 pl-2 sm:pl-3 hover:opacity-80 transition-opacity"
           >
             <div className="w-9 h-9 rounded-xl bg-sky-600 text-white font-bold flex items-center justify-center text-xs shadow-xs">
               {currentUser.nome.charAt(0)}

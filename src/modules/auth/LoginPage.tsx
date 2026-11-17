@@ -8,31 +8,28 @@ import {
   Mail,
   ShieldCheck,
   Stethoscope,
-  ShoppingBag,
   BedDouble,
-  Sun,
-  KeyRound,
   ArrowRight,
   AlertCircle,
   Eye,
   EyeOff,
-  Building2,
 } from 'lucide-react';
 
 export const LoginPage = () => {
-  const { login, loginWithCognito, quickLogin, users } = useAuth();
+  const { login, loginWithCognito } = useAuth();
   const navigate = useNavigate();
 
-  const [email, setEmail] = useState('socio.a@pethub.com.br');
-  const [password, setPassword] = useState('pethub123');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
   const handleCognitoGoogleLogin = () => {
     loginWithCognito('Google');
   };
 
-  const handleFormSubmit = (e: React.FormEvent) => {
+  const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
 
@@ -46,17 +43,17 @@ export const LoginPage = () => {
       return;
     }
 
-    const success = login(email, password);
-    if (success) {
-      navigate('/');
-    } else {
-      setErrorMsg('E-mail ou senha incorretos. Verifique suas credenciais.');
+    setIsSubmitting(true);
+    try {
+      const result = await login(email, password);
+      if (result.success) {
+        navigate('/');
+      } else {
+        setErrorMsg(result.message || 'E-mail ou senha incorretos.');
+      }
+    } finally {
+      setIsSubmitting(false);
     }
-  };
-
-  const handleQuickLogin = (userId: string) => {
-    quickLogin(userId);
-    navigate('/');
   };
 
   return (
@@ -186,9 +183,10 @@ export const LoginPage = () => {
 
                 <button
                   type="submit"
-                  className="w-full py-3 px-4 bg-sky-600 hover:bg-sky-700 text-white font-bold rounded-xl text-xs shadow-md shadow-sky-600/30 transition-all flex items-center justify-center gap-2 mt-2"
+                  disabled={isSubmitting}
+                  className="w-full py-3 px-4 bg-sky-600 hover:bg-sky-700 disabled:opacity-60 text-white font-bold rounded-xl text-xs shadow-md shadow-sky-600/30 transition-all flex items-center justify-center gap-2 mt-2 cursor-pointer"
                 >
-                  <span>Entrar no Sistema</span>
+                  <span>{isSubmitting ? 'Autenticando no Cognito...' : 'Entrar no Sistema'}</span>
                   <ArrowRight className="w-4 h-4" />
                 </button>
               </form>
@@ -230,64 +228,6 @@ export const LoginPage = () => {
                   </svg>
                   <span>Entrar com o Google</span>
                 </button>
-              </div>
-            </div>
-
-            {/* Quick Demo Credentials */}
-            <div className="bg-slate-900 rounded-2xl p-4 border border-slate-800 space-y-2.5">
-              <div className="flex items-center justify-between px-1">
-                <span className="text-[11px] font-bold text-slate-300 uppercase tracking-wider">
-                  Acesso Rápido para Demonstração
-                </span>
-                <span className="text-[10px] text-slate-500">Selecione uma conta:</span>
-              </div>
-
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
-                {users.map((u) => {
-                  let roleBadge = 'Gestor A';
-                  let icon = ShoppingBag;
-
-                  if (u.perfil === 'SOCIO_A') {
-                    roleBadge = 'Clínica & Shop';
-                    icon = ShoppingBag;
-                  } else if (u.perfil === 'SOCIO_B') {
-                    roleBadge = 'Hotel & Creche';
-                    icon = BedDouble;
-                  } else if (u.perfil === 'ADMIN') {
-                    roleBadge = 'Diretoria';
-                    icon = Building2;
-                  } else if (u.perfil === 'VET') {
-                    roleBadge = 'Veterinário';
-                    icon = Stethoscope;
-                  } else if (u.perfil === 'FUNCIONARIO') {
-                    roleBadge = 'Recepção';
-                    icon = Sun;
-                  } else {
-                    roleBadge = 'Cliente';
-                    icon = KeyRound;
-                  }
-
-                  const IconComponent = icon;
-
-                  return (
-                    <button
-                      key={u.id}
-                      type="button"
-                      onClick={() => handleQuickLogin(u.id)}
-                      className="p-2.5 rounded-xl bg-slate-800/80 border border-slate-700 hover:border-sky-500 hover:bg-slate-800 transition-all text-left flex flex-col justify-between group"
-                    >
-                      <div className="flex items-center justify-between w-full mb-1">
-                        <IconComponent className="w-3.5 h-3.5 text-slate-400 group-hover:text-sky-400" />
-                        <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-slate-950 text-slate-300 font-mono">
-                          {roleBadge}
-                        </span>
-                      </div>
-                      <span className="font-bold text-white text-[11px] truncate block w-full">
-                        {u.nome.split(' ')[0]} {u.nome.split(' ')[1] || ''}
-                      </span>
-                    </button>
-                  );
-                })}
               </div>
             </div>
           </div>

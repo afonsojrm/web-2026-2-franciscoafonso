@@ -1,6 +1,17 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
-import type { User, OperatingUnit } from '../types';
-import { INITIAL_USERS } from '../data/mockData';
+import type { User, UserProfile, OperatingUnit } from '../types';
+
+const COGNITO_DIRECT_CLIENT_ID =
+  import.meta.env.VITE_COGNITO_DIRECT_CLIENT_ID || '3q4bh38dq7k9peha8ihjahqaom';
+
+const ROLE_UNITS_MAP: Record<UserProfile, OperatingUnit[]> = {
+  ADMIN: ['CLINICA', 'PETSHOP', 'HOTEL', 'CRECHE'],
+  SOCIO_A: ['CLINICA', 'PETSHOP'],
+  SOCIO_B: ['HOTEL', 'CRECHE'],
+  VET: ['CLINICA'],
+  FUNCIONARIO: ['PETSHOP', 'HOTEL', 'CRECHE'],
+  TUTOR: [],
+};
 
 interface CognitoProfileClaims {
   name: string;
@@ -10,7 +21,6 @@ interface CognitoProfileClaims {
 
 interface AuthContextType {
   currentUser: User | null;
-  users: User[];
   isAuthenticated: boolean;
   authToken: string | null;
   cognitoToken: string | null;
@@ -18,12 +28,10 @@ interface AuthContextType {
   getValidCognitoToken: () => string | null;
   invalidateCognitoToken: () => void;
   updateCurrentUserProfile: (fields: { nome?: string; email?: string }) => void;
-  login: (email: string, password?: string) => boolean;
+  login: (email: string, password: string) => Promise<{ success: boolean; message?: string }>;
   loginWithGoogle: (credential: string) => { success: boolean; message?: string };
   loginWithCognito: (provider?: 'Google', redirectAfter?: string) => void;
-  quickLogin: (userId: string) => void;
   logout: () => void;
-  switchUser: (userId: string) => void;
   canAccessUnit: (unit: OperatingUnit) => boolean;
   canManageMedicalRecords: () => boolean;
   canManageFinancial: () => boolean;
@@ -40,6 +48,7 @@ interface DecodedJwtPayload {
   iss?: string;
   exp?: number;
   'cognito:username'?: string;
+  'cognito:groups'?: string[];
 }
 
 const decodeGoogleCredential = (token: string): DecodedJwtPayload | null => {
@@ -100,58 +109,69 @@ const buildDisplayNameFromPayload = (payload: DecodedJwtPayload): string => {
   return 'Usuário Cognito';
 };
 
-const buildUserFromPayload = (payload: DecodedJwtPayload, existingUsers: User[]): User | null => {
+const resolveProfileFromGroups = (groups?: string[]): UserProfile => {
+  if (!Array.isArray(groups) || groups.length === 0) return 'ADMIN';
+  const orderedRoles: UserProfile[] = ['ADMIN', 'SOCIO_A', 'SOCIO_B', 'VET', 'FUNCIONARIO', 'TUTOR'];
+  for (const role of orderedRoles) {
+    if (groups.includes(role)) {
+      return role;
+    }
+  }
+  return 'ADMIN';
+};
+
+const buildUserFromPayload = (payload: DecodedJwtPayload): User | null => {
   if (!payload.email && !payload.sub) return null;
-  const matched = payload.email
-    ? existingUsers.find((u) => u.email.toLowerCase() === payload.email!.toLowerCase())
-    : undefined;
-  if (matched) return matched;
-  const isRealCognito = Boolean(payload.iss && payload.iss.includes('cognito-idp.'));
+  const perfil = resolveProfileFromGroups(payload['cognito:groups']);
   return {
-    id: `${isRealCognito ? 'cognito' : 'google'}-${payload.sub || Math.random().toString(36).substring(2, 9)}`,
+    id: `cognito-${payload.sub || Math.random().toString(36).substring(2, 9)}`,
     nome: buildDisplayNameFromPayload(payload),
     email: payload.email || '',
-    perfil: 'ADMIN',
-    unidadesAutorizadas: ['CLINICA', 'PETSHOP', 'HOTEL', 'CRECHE'],
+    perfil,
+    unidadesAutorizadas: ROLE_UNITS_MAP[perfil],
     ativo: true,
+    crmv: perfil === 'VET' ? 'CRMV-RN 14205' : undefined,
   };
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [users, setUsers] = useState<User[]>(INITIAL_USERS);
-
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
     const hashToken = readHashIdToken();
-    if (hashToken) {
+    if (hashToken && isCognitoJwtValid(hashToken)) {
       const payload = decodeGoogleCredential(hashToken);
       if (payload) {
-        const userFromHash = buildUserFromPayload(payload, INITIAL_USERS);
+        const userFromHash = buildUserFromPayload(payload);
         if (userFromHash) return userFromHash;
       }
     }
 
-    const savedUserId = localStorage.getItem('pethub_current_user_id');
-    const savedToken = localStorage.getItem('pethub_jwt_token');
-    const savedUserData = localStorage.getItem('pethub_current_user_data');
-    if (savedUserId && savedToken) {
+    const savedCognito = localStorage.getItem('pethub_cognito_id_token');
+    if (isCognitoJwtValid(savedCognito)) {
+      const savedUserData = localStorage.getItem('pethub_current_user_data');
       if (savedUserData) {
         try {
-          return JSON.parse(savedUserData);
+          const parsed = JSON.parse(savedUserData) as User;
+          if (parsed?.id?.startsWith('cognito-')) {
+            return parsed;
+          }
         } catch {
-          // fallback
+          // fallback para decodificação do token Cognito
         }
       }
-      return INITIAL_USERS.find((u) => u.id === savedUserId) || null;
+      const payload = decodeGoogleCredential(savedCognito!);
+      if (payload) return buildUserFromPayload(payload);
     }
+
     return null;
   });
 
   const [authToken, setAuthToken] = useState<string | null>(() => {
     const hashToken = readHashIdToken();
-    if (hashToken) return hashToken;
-    return localStorage.getItem('pethub_jwt_token') || null;
+    if (isCognitoJwtValid(hashToken)) return hashToken;
+    const savedCognito = localStorage.getItem('pethub_cognito_id_token');
+    return isCognitoJwtValid(savedCognito) ? savedCognito : null;
   });
 
   const [cognitoToken, setCognitoToken] = useState<string | null>(() => {
@@ -181,33 +201,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [cognitoToken]);
 
-  const generateJwtPayload = (user: User) => {
-    // Simulated JWT token following the specification RF01.1
-    const header = btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
-    const payload = btoa(
-      JSON.stringify({
-        sub: user.id,
-        name: user.nome,
-        role: user.perfil,
-        units: user.unidadesAutorizadas,
-        exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24, // 24h
-      })
-    );
-    const signature = 'aws_jwt_sig_pethub2026';
-    return `${header}.${payload}.${signature}`;
-  };
-
-  const login = (email: string, _password?: string): boolean => {
-    const user = users.find((u) => u.email.toLowerCase() === email.trim().toLowerCase());
-    if (user && user.ativo) {
-      const token = generateJwtPayload(user);
-      setCurrentUser(user);
-      setAuthToken(token);
-      return true;
-    }
-    return false;
-  };
-
   const loginWithCognito = (provider?: 'Google', redirectAfter?: string) => {
     const domain =
       import.meta.env.VITE_COGNITO_DOMAIN ||
@@ -227,56 +220,71 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const loginWithGoogle = (credential: string): { success: boolean; message?: string } => {
     const payload = decodeGoogleCredential(credential);
-    const isRealCognito = Boolean(payload?.iss && payload.iss.includes('cognito-idp.'));
-
-    if (isRealCognito) {
-      console.log(
-        '%c🔐 TOKEN JWT REAL DO AWS COGNITO (Autorizado para API Gateway /profile):',
-        'color: #0284c7; font-weight: bold; font-size: 13px;'
-      );
-      console.log(credential);
-      localStorage.setItem('pethub_cognito_id_token', credential);
-      setCognitoToken(credential);
-    } else {
-      // Salva o token JWT original emitido pelo Google no localStorage para inspeção
-      localStorage.setItem('google_id_token', credential);
-      console.log(
-        '%c🔑 TOKEN JWT GERADO PELO GOOGLE (Copie para o https://jwt.io):',
-        'color: #10b981; font-weight: bold; font-size: 14px;'
-      );
-      console.log(credential);
+    if (!payload || !isCognitoJwtValid(credential)) {
+      return { success: false, message: 'Token JWT do AWS Cognito inválido ou expirado.' };
     }
 
-    if (!payload || (!payload.email && !payload.sub)) {
-      return { success: false, message: 'Não foi possível validar o token de autenticação.' };
-    }
-
-    let user = payload.email
-      ? users.find((u) => u.email.toLowerCase() === payload.email!.toLowerCase())
-      : undefined;
-
+    const user = buildUserFromPayload(payload);
     if (!user) {
-      // Usuário autenticado externamente não estava no mock pré-definido:
-      // cria perfil ativo no sistema com permissões de visualização/administração
-      user = {
-        id: `${isRealCognito ? 'cognito' : 'google'}-${payload.sub || Math.random().toString(36).substring(2, 9)}`,
-        nome: buildDisplayNameFromPayload(payload),
-        email: payload.email || '',
-        perfil: 'ADMIN',
-        unidadesAutorizadas: ['CLINICA', 'PETSHOP', 'HOTEL', 'CRECHE'],
-        ativo: true,
-      };
-      setUsers((prev) => [...prev, user!]);
+      return { success: false, message: 'Não foi possível identificar o usuário no token.' };
     }
 
-    if (!user.ativo) {
-      return { success: false, message: 'Usuário desativado pelo administrador.' };
-    }
-
-    const token = isRealCognito ? credential : generateJwtPayload(user);
+    console.log(
+      '%c🔐 TOKEN JWT REAL DO AWS COGNITO:',
+      'color: #0284c7; font-weight: bold; font-size: 13px;'
+    );
+    console.log(credential);
+    localStorage.setItem('pethub_cognito_id_token', credential);
+    setCognitoToken(credential);
     setCurrentUser(user);
-    setAuthToken(token);
+    setAuthToken(credential);
     return { success: true };
+  };
+
+  const login = async (
+    email: string,
+    password: string
+  ): Promise<{ success: boolean; message?: string }> => {
+    try {
+      const response = await fetch('https://cognito-idp.us-east-1.amazonaws.com/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-amz-json-1.1',
+          'X-Amz-Target': 'AWSCognitoIdentityProviderService.InitiateAuth',
+        },
+        body: JSON.stringify({
+          AuthFlow: 'USER_PASSWORD_AUTH',
+          ClientId: COGNITO_DIRECT_CLIENT_ID,
+          AuthParameters: {
+            USERNAME: email.trim().toLowerCase(),
+            PASSWORD: password,
+          },
+        }),
+      });
+
+      const data = (await response.json()) as {
+        AuthenticationResult?: { IdToken?: string };
+        message?: string;
+        __type?: string;
+      };
+
+      if (!response.ok || !data.AuthenticationResult?.IdToken) {
+        if (data.__type?.includes('NotAuthorizedException') || data.__type?.includes('UserNotFoundException')) {
+          return { success: false, message: 'E-mail ou senha inválidos no AWS Cognito.' };
+        }
+        return {
+          success: false,
+          message: data.message || 'Falha na autenticação com o AWS Cognito.',
+        };
+      }
+
+      return loginWithGoogle(data.AuthenticationResult.IdToken);
+    } catch (err) {
+      return {
+        success: false,
+        message: err instanceof Error ? err.message : 'Erro de rede ao autenticar no Cognito.',
+      };
+    }
   };
 
   // Limpa hash #id_token=... após inicialização síncrona ou trata callback ?code=...
@@ -329,15 +337,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   }, []);
 
-  const quickLogin = (userId: string) => {
-    const user = users.find((u) => u.id === userId);
-    if (user && user.ativo) {
-      const token = generateJwtPayload(user);
-      setCurrentUser(user);
-      setAuthToken(token);
-    }
-  };
-
   const invalidateCognitoToken = () => {
     setCognitoToken(null);
     localStorage.removeItem('pethub_cognito_id_token');
@@ -363,9 +362,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, [cognitoToken]);
 
   const logout = () => {
-    const hadCognitoSession = Boolean(
-      cognitoToken || localStorage.getItem('pethub_cognito_id_token')
-    );
+    const allowedLogoutOrigins = [
+      'http://localhost:5173',
+      'https://franciscoafonso.zangado.web.ufersa.dev.br',
+    ];
+    const shouldClearHostedUiSession =
+      Boolean(cognitoToken || localStorage.getItem('pethub_cognito_id_token')) &&
+      allowedLogoutOrigins.includes(window.location.origin);
+
     setCurrentUser(null);
     setAuthToken(null);
     setCognitoToken(null);
@@ -374,22 +378,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     localStorage.removeItem('pethub_jwt_token');
     localStorage.removeItem('pethub_cognito_id_token');
 
-    if (hadCognitoSession) {
+    if (shouldClearHostedUiSession) {
       const domain =
         import.meta.env.VITE_COGNITO_DOMAIN ||
         'https://us-east-1wfnrpejee.auth.us-east-1.amazoncognito.com';
       const clientId = import.meta.env.VITE_COGNITO_CLIENT_ID || '5qvdtepvfcgd07q5en3bm8spv7';
       const logoutUri = `${window.location.origin}/login`;
       window.location.href = `${domain}/logout?client_id=${clientId}&logout_uri=${encodeURIComponent(logoutUri)}`;
-    }
-  };
-
-  const switchUser = (userId: string) => {
-    const user = users.find((u) => u.id === userId);
-    if (user) {
-      const token = generateJwtPayload(user);
-      setCurrentUser(user);
-      setAuthToken(token);
     }
   };
 
@@ -464,8 +459,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     <AuthContext.Provider
       value={{
         currentUser,
-        users,
-        isAuthenticated: !!currentUser && !!authToken,
+        isAuthenticated: Boolean(currentUser && authToken && cognitoToken),
         authToken,
         cognitoToken,
         cognitoProfileClaims,
@@ -475,9 +469,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         login,
         loginWithGoogle,
         loginWithCognito,
-        quickLogin,
         logout,
-        switchUser,
         canAccessUnit,
         canManageMedicalRecords,
         canManageFinancial,

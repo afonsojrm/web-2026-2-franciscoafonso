@@ -363,6 +363,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, [cognitoToken]);
 
   const logout = () => {
+    const hadCognitoSession = Boolean(
+      cognitoToken || localStorage.getItem('pethub_cognito_id_token')
+    );
     setCurrentUser(null);
     setAuthToken(null);
     setCognitoToken(null);
@@ -370,6 +373,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     localStorage.removeItem('pethub_current_user_data');
     localStorage.removeItem('pethub_jwt_token');
     localStorage.removeItem('pethub_cognito_id_token');
+
+    if (hadCognitoSession) {
+      const domain =
+        import.meta.env.VITE_COGNITO_DOMAIN ||
+        'https://us-east-1wfnrpejee.auth.us-east-1.amazoncognito.com';
+      const clientId = import.meta.env.VITE_COGNITO_CLIENT_ID || '5qvdtepvfcgd07q5en3bm8spv7';
+      const logoutUri = `${window.location.origin}/login`;
+      window.location.href = `${domain}/logout?client_id=${clientId}&logout_uri=${encodeURIComponent(logoutUri)}`;
+    }
   };
 
   const switchUser = (userId: string) => {

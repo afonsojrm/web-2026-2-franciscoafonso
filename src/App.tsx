@@ -16,6 +16,7 @@ import { DaycarePage } from './modules/daycare/DaycarePage';
 import { FinancePage } from './modules/finance/FinancePage';
 import { AuditPage } from './modules/audit/AuditPage';
 import { ClientBookingsPage } from './modules/scheduling/ClientBookingsPage';
+import { ProfilePage } from './modules/profile/ProfilePage';
 
 export function App() {
   return (
@@ -43,6 +44,7 @@ export function App() {
                       <Route path="/creche" element={<DaycarePage />} />
                       <Route path="/financeiro" element={<FinancePage />} />
                       <Route path="/auditoria" element={<AuditPage />} />
+                      <Route path="/profile" element={<ProfilePage />} />
                       <Route path="*" element={<Navigate to="/" replace />} />
                     </Routes>
                   </Layout>

@@ -17,6 +17,7 @@ const ROUTE_MAP: Record<string, RouteMeta> = {
   '/creche': { section: 'Hospedagem & Recreação', name: 'Creche / Daycare' },
   '/financeiro': { section: 'Gestão & Controle', name: 'Fluxo Financeiro' },
   '/auditoria': { section: 'Gestão & Controle', name: 'Trilha de Auditoria' },
+  '/profile': { section: 'Conta', name: 'Meu Perfil (S3)' },
 };
 
 export const Breadcrumbs = () => {

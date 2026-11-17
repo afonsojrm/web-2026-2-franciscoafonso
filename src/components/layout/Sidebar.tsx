@@ -14,6 +14,7 @@ import {
   X,
   PawPrint,
   LogOut,
+  UserCircle2,
 } from 'lucide-react';
 import type { OperatingUnit } from '../../types';
 
@@ -75,6 +76,7 @@ export const Sidebar = ({ isMobile, isOpen, onClose }: SidebarProps) => {
     ...(canAccessAudit()
       ? [{ name: 'Auditoria de Eventos', path: '/auditoria', icon: History }]
       : []),
+    { name: 'Meu Perfil (S3)', path: '/profile', icon: UserCircle2 },
   ];
 
   const renderLink = (item: NavItem) => {

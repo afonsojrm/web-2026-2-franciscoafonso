@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
 import { PawPrint, ChevronDown, LogOut, Building2, RotateCcw, Menu } from 'lucide-react';
@@ -97,8 +98,12 @@ export const Topbar = ({ isMobile, onToggleMobileMenu }: TopbarProps) => {
             </div>
           </div>
 
-          {/* Current User Badge */}
-          <div className="flex items-center gap-2.5 pl-2 sm:pl-3 sm:border-l sm:border-slate-200">
+          {/* Current User Badge (Link para /profile) */}
+          <Link
+            to="/profile"
+            title="Abrir Meu Perfil e Foto no S3"
+            className="flex items-center gap-2.5 pl-2 sm:pl-3 sm:border-l sm:border-slate-200 hover:opacity-80 transition-opacity"
+          >
             <div className="w-9 h-9 rounded-xl bg-sky-600 text-white font-bold flex items-center justify-center text-xs shadow-xs">
               {currentUser.nome.charAt(0)}
             </div>
@@ -115,7 +120,7 @@ export const Topbar = ({ isMobile, onToggleMobileMenu }: TopbarProps) => {
                 {currentUser.perfil === 'TUTOR' && 'Cliente'}
               </div>
             </div>
-          </div>
+          </Link>
 
           {/* Logout button */}
           <button
